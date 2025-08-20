@@ -23,11 +23,14 @@ class TestGraphLink(unittest.TestCase):
 
     def test_residual_block(self):
         input_dim = 8
+        batch_size = 32  # Example batch size
+
         # ParamVec for both linears
         weight1 = ParamVec(shape=None, init="xavier_uniform", init_kwargs={"fan_out": input_dim})
         bias1 = ParamVec(shape=None, init="zeros")
         weight2 = ParamVec(shape=None, init="xavier_uniform", init_kwargs={"fan_out": input_dim})
         bias2 = ParamVec(shape=None, init="zeros")
+
         nodes = [
             {"id": "input", "op": "input", "inputs": [], "kwargs": {}},
             {"id": "linear1", "op": "linear", "inputs": ["input"], "kwargs": {"dim_out": input_dim, "weight": weight1, "bias": bias1}},
@@ -36,16 +39,17 @@ class TestGraphLink(unittest.TestCase):
             {"id": "add", "op": "add", "inputs": ["linear2", "input"], "kwargs": {}},
             {"id": "output", "op": "output_marker", "inputs": ["add"], "kwargs": {}},
         ]
+
         graph = GraphLink(nodes, output_id="output", trace=True)
-        x = torch.randn(input_dim)
+        x = torch.randn(batch_size, input_dim)
         out = graph(x)
-        self.assertEqual(out.shape, (input_dim,))
+        self.assertEqual(out.shape, (batch_size, input_dim))
 
 if __name__ == "__main__":
     print("Running examples...")
 
     # GraphLink example: DAG
-    x = torch.randn(5)
+    x = torch.randn(5,2)
     weight1 = ParamVec(shape=None, init="xavier_uniform", init_kwargs={"fan_out": 4})
     bias1 = ParamVec(shape=None, init="zeros")
     weight2 = ParamVec(shape=None, init="xavier_uniform", init_kwargs={"fan_out": 4})

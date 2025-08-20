@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from typing import  Dict, Any, List
+from typing import Dict, Any, List
 
 class GraphLink(nn.Module):
     """A module for defining a computation graph (DAG) with ParamVec operations.
@@ -71,7 +71,7 @@ class GraphLink(nn.Module):
             elif op == "output_marker":
                 values[nid] = inputs[0] if inputs else x
             elif op == "linear":
-                dim_in = inputs[0].shape[0]
+                dim_in = inputs[0].shape[-1] if inputs[0].dim() >= 1 else 1
                 dim_out = kwargs["dim_out"]
                 weight = kwargs["weight"]
                 weight._ensure_materialized((dim_out, dim_in))
@@ -81,12 +81,15 @@ class GraphLink(nn.Module):
                 if "bias" in kwargs and kwargs["bias"] is not None:
                     bias = kwargs["bias"]
                     bias._ensure_materialized((dim_out,))
-                    result += bias.tensor()
+                    b_t = bias.tensor()
+                    if getattr(bias, "shape", None) is not None and len(bias.shape) == 1 and bias.shape[0] == 1:
+                        b_t = b_t.expand_as(result)
+                    result += b_t
                 values[nid] = result
             elif op == "add":
                 if "param" in kwargs:
                     param = kwargs["param"]
-                    dim = inputs[0].shape[0] if inputs[0].dim() > 0 else 1
+                    dim = inputs[0].shape[-1] if inputs[0].dim() >= 1 else 1
                     param._ensure_materialized((dim,))
                     p_t = param.tensor()
                     if getattr(param, "shape", None) is not None and len(param.shape) == 1 and param.shape[0] == 1:
@@ -101,7 +104,7 @@ class GraphLink(nn.Module):
             elif op == "mul":
                 if "param" in kwargs:
                     param = kwargs["param"]
-                    dim = inputs[0].shape[0] if inputs[0].dim() > 0 else 1
+                    dim = inputs[0].shape[-1] if inputs[0].dim() >= 1 else 1
                     param._ensure_materialized((dim,))
                     p_t = param.tensor()
                     if getattr(param, "shape", None) is not None and len(param.shape) == 1 and param.shape[0] == 1:
@@ -115,21 +118,21 @@ class GraphLink(nn.Module):
                     values[nid] = result
             elif op == "dot":
                 param = kwargs["param"]
-                dim = inputs[0].shape[0] if inputs[0].dim() > 0 else 1
+                dim = inputs[0].shape[-1] if inputs[0].dim() >= 1 else 1
                 param._ensure_materialized((dim,))
                 p_t = param.tensor()
-                if inputs[0].shape != p_t.shape:
-                    if inputs[0].numel() == 1:
-                        values[nid] = inputs[0].item() * torch.sum(p_t)
-                    elif p_t.numel() == 1:
-                        values[nid] = p_t.item() * torch.sum(inputs[0])
-                    else:
-                        raise ValueError("Shape mismatch for dot")
+                p_dim = p_t.shape[0] if p_t.dim() >= 1 else 1
+                if dim == p_dim:
+                    values[nid] = torch.sum(inputs[0] * p_t, dim=-1)
+                elif p_dim == 1:
+                    values[nid] = p_t * torch.sum(inputs[0], dim=-1)
+                elif dim == 1:
+                    values[nid] = torch.sum(p_t) * inputs[0].squeeze(-1) if inputs[0].dim() >= 1 else torch.sum(p_t) * inputs[0]
                 else:
-                    values[nid] = torch.dot(inputs[0], p_t)
+                    raise ValueError("Shape mismatch for dot")
             elif op == "concat":
                 # Concat outputs of previous nodes (inputs), not ParamVec weights
-                values[nid] = torch.cat(inputs, dim=0)
+                values[nid] = torch.cat(inputs, dim=-1)
             elif op == "act":
                 act_type = kwargs["act_type"]
                 if act_type == "relu":
@@ -137,7 +140,7 @@ class GraphLink(nn.Module):
                 elif act_type == "tanh":
                     values[nid] = torch.tanh(inputs[0])
                 elif act_type == "softmax":
-                    values[nid] = torch.softmax(inputs[0], dim=0)
+                    values[nid] = torch.softmax(inputs[0], dim=-1)
                 else:
                     raise ValueError(f"Unsupported act_type: {act_type}")
             elif op == "custom":

@@ -1,73 +1,241 @@
 import torch
 from torch import nn
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
-class GraphLink(nn.Module):
-    """A module for defining a computation graph (DAG) with ParamVec operations.
+class Node(nn.Module):
+    """Base class for defining a single node in a computation graph.
 
     Args:
-        nodes: List of node dicts with keys: id (str), op (str), inputs (List[str]), kwargs (dict).
-            Each dict defines a node in the graph, where:
-            - id: Unique identifier for the node.
-            - op: Operation type (e.g., 'linear', 'add', 'mul', 'dot', 'concat', 'act', 'input', 'input_marker', 'output_marker', 'custom').
-            - inputs: List of node IDs whose outputs feed into this node.
-            - kwargs: Operation-specific parameters (e.g., weight, bias, dim_out, act_type).
+        id: Unique identifier for the node.
+        op: Operation type (e.g., 'linear', 'add', 'mul', 'dot', 'concat', 'act', 'input', 'input_marker', 'output_marker', 'custom').
+        inputs: List of node IDs whose outputs feed into this node.
+        kwargs: Operation-specific parameters (e.g., weight, bias, dim_out, act_type).
+
+    Usage:
+        Subclass Node to implement specific operations or instantiate directly:
+        node = Node(id="linear1", op="linear", inputs=["input"], kwargs={"dim_out": 4, "weight": ParamVec(), "bias": ParamVec()})
+    """
+    def __init__(self, id: str, op: str, inputs: List[str], kwargs: Dict[str, Any]):
+        super().__init__()
+        self.id = id
+        self.op = op
+        self.inputs = inputs
+        self.kwargs = kwargs
+        self.input_shape = None
+        self.output_shape = None
+        self._register_parameters()
+
+    def _register_parameters(self):
+        """Register node parameters as PyTorch module parameters."""
+        if self.op == "linear":
+            self.add_module(f"weight_{self.id}_{id(self.kwargs['weight'])}", self.kwargs["weight"])
+            if "bias" in self.kwargs and self.kwargs["bias"] is not None:
+                self.add_module(f"bias_{self.id}_{id(self.kwargs['bias'])}", self.kwargs["bias"])
+        elif self.op in ["add", "mul", "dot"]:
+            if "param" in self.kwargs:
+                self.add_module(f"param_{self.id}_{id(self.kwargs['param'])}", self.kwargs["param"])
+        elif self.op == "concat":
+            # concat uses no parameters
+            pass
+
+    def forward(self, input_tensors: List[torch.Tensor], x: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Compute the node's output based on its operation and inputs.
+
+        Args:
+            input_tensors: List of input tensors from parent nodes.
+            x: Input tensor for 'input' or 'input_marker' operations (optional).
+
+        Returns:
+            Output tensor of the node.
+        """
+        try:
+            if self.op == "input":
+                if self.id != "input":
+                    raise ValueError("Only one node can have op='input' with id='input'")
+                result = x
+                self.input_shape = None
+                self.output_shape = tuple(result.shape) if result is not None else None
+                return result
+            elif self.op == "input_marker":
+                result = x
+                self.input_shape = None
+                self.output_shape = tuple(result.shape) if result is not None else None
+                return result
+            elif self.op == "output_marker":
+                result = input_tensors[0] if input_tensors else x
+                self.input_shape = [t.shape for t in input_tensors] if input_tensors else None
+                self.output_shape = tuple(result.shape) if result is not None else None
+                return result
+            elif self.op == "linear":
+                dim_in = input_tensors[0].shape[-1] if input_tensors[0].dim() >= 1 else 1
+                dim_out = self.kwargs["dim_out"]
+                weight = self.kwargs["weight"]
+                if weight.shape is None:
+                    weight._ensure_materialized((dim_out, dim_in))
+                else:
+                    if weight.shape != (dim_out, dim_in):
+                        raise ValueError(f"Invalid weight shape {weight.shape} for node {self.id}, possible shapes: [({dim_out}, {dim_in})]")
+                    weight._ensure_materialized((dim_out, dim_in))
+                w_flat = weight.tensor()
+                w_t = w_flat.view(dim_out, dim_in)
+                result = torch.matmul(input_tensors[0], w_t.T)
+                if "bias" in self.kwargs and self.kwargs["bias"] is not None:
+                    bias = self.kwargs["bias"]
+                    if bias.shape is None:
+                        bias._ensure_materialized((dim_out,))
+                    elif bias.shape == (dim_out,) or bias.shape == (1,):
+                        bias._ensure_materialized(bias.shape)
+                    else:
+                        raise ValueError(f"Invalid bias shape {bias.shape} for node {self.id}, possible shapes: [(1,), ({dim_out},)]")
+                    b_t = bias.tensor()
+                    result += b_t
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            elif self.op == "add":
+                if "param" in self.kwargs:
+                    param = self.kwargs["param"]
+                    dim = input_tensors[0].shape[-1] if input_tensors[0].dim() >= 1 else 1
+                    if param.shape is None:
+                        param._ensure_materialized((dim,))
+                    elif param.shape == (dim,) or param.shape == (1,):
+                        param._ensure_materialized(param.shape)
+                    else:
+                        raise ValueError(f"Invalid param shape {param.shape} for node {self.id}, possible shapes: [(1,), ({dim},)]")
+                    p_t = param.tensor()
+                    result = input_tensors[0] + p_t
+                else:
+                    result = input_tensors[0]
+                    for inp in input_tensors[1:]:
+                        result = result + inp
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            elif self.op == "mul":
+                if "param" in self.kwargs:
+                    param = self.kwargs["param"]
+                    dim = input_tensors[0].shape[-1] if input_tensors[0].dim() >= 1 else 1
+                    if param.shape is None:
+                        param._ensure_materialized((dim,))
+                    elif param.shape == (dim,) or param.shape == (1,):
+                        param._ensure_materialized(param.shape)
+                    else:
+                        raise ValueError(f"Invalid param shape {param.shape} for node {self.id}, possible shapes: [(1,), ({dim},)]")
+                    p_t = param.tensor()
+                    result = input_tensors[0] * p_t
+                else:
+                    result = input_tensors[0]
+                    for inp in input_tensors[1:]:
+                        result = result * inp
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            elif self.op == "dot":
+                param = self.kwargs["param"]
+                dim = input_tensors[0].shape[-1] if input_tensors[0].dim() >= 1 else 1
+                if param.shape is None:
+                    param._ensure_materialized((dim,))
+                elif param.shape == (dim,) or param.shape == (1,):
+                    param._ensure_materialized(param.shape)
+                else:
+                    raise ValueError(f"Invalid param shape {param.shape} for node {self.id}, possible shapes: [(1,), ({dim},)]")
+                p_t = param.tensor()
+                result = torch.sum(input_tensors[0] * p_t, dim=-1)
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            elif self.op == "concat":
+                result = torch.cat(input_tensors, dim=-1)
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            elif self.op == "act":
+                act_type = self.kwargs["act_type"]
+                if act_type == "relu":
+                    result = torch.relu(input_tensors[0])
+                elif act_type == "tanh":
+                    result = torch.tanh(input_tensors[0])
+                elif act_type == "softmax":
+                    result = torch.softmax(input_tensors[0], dim=-1)
+                else:
+                    raise ValueError(f"Unsupported act_type: {act_type}")
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            elif self.op == "custom":
+                fn = self.kwargs["fn"]
+                result = fn(input_tensors)
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            elif self.op == "avg":
+                # tính trung bình các input tensors
+                result = input_tensors[0]
+                for inp in input_tensors[1:]:
+                    result = result + inp
+                result = result / len(input_tensors)
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            elif self.op == "sign":
+                result = torch.sign(input_tensors[0])
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            elif self.op == "threshold":
+                threshold = self.kwargs.get("threshold", 0.5)
+                result = (input_tensors[0] > threshold).to(input_tensors[0].dtype)
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            elif self.op == "argmax":
+                result = torch.argmax(input_tensors[0], dim=-1)
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            elif self.op == "argmin":
+                result = torch.argmin(input_tensors[0], dim=-1)
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            else:
+                raise ValueError(f"Unsupported op: {self.op}")
+        except Exception as e:
+            raise RuntimeError(f"[GraphLink] Error in node '{self.id}' (op={self.op}): {str(e)}") from e
+
+class GraphLink(nn.Module):
+    """A module for defining a computation graph (DAG) with Node operations.
+
+    Args:
+        nodes: List of Node objects defining the graph structure.
         output_id: ID of the node whose output is the final result of the graph.
         trace: If True, prints debugging information (node ID, operation, and input shapes) during forward pass.
 
     Usage:
-        Create a list of node dictionaries specifying the graph structure, then instantiate GraphLink with the nodes,
-        output node ID, and optional trace flag. Example:
+        Create Node objects and pass them to GraphLink:
         nodes = [
-            {"id": "input", "op": "input", "inputs": [], "kwargs": {}},
-            {"id": "linear1", "op": "linear", "inputs": ["input"], "kwargs": {"dim_out": 4, "weight": ParamVec(), "bias": ParamVec()}},
-            {"id": "softmax", "op": "act", "inputs": ["linear1"], "kwargs": {"act_type": "softmax"}}
+            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="linear1", op="linear", inputs=["input"], kwargs={"dim_out": 4, "weight": ParamVec(), "bias": ParamVec()}),
+            Node(id="softmax", op="act", inputs=["linear1"], kwargs={"act_type": "softmax"})
         ]
         model = GraphLink(nodes, output_id="softmax", trace=True)
         output = model(torch.randn(8))  # Forward pass with input tensor
     """
-
-    def __init__(self, nodes: List[Dict[str, Any]], output_id: str, trace: bool = False):
-        """Initialize the GraphLink module by setting up nodes, output ID, and parameters.
-
-        - Converts the list of nodes into a dictionary for O(1) access by node ID.
-        - Computes topological order of nodes to ensure correct forward pass execution.
-        - Registers trainable parameters (weights, biases, or other parameters) as PyTorch module parameters.
-        - Parameters are registered with unique names based on node ID and parameter object ID to avoid conflicts.
-
-        Usage:
-            Instantiate with a list of node dictionaries and the output node ID. Set trace=True for debugging output during forward pass.
-        """
+    def __init__(self, nodes: List[Node], output_id: str, trace: bool = False):
         super().__init__()
-        self.nodes = {node["id"]: node for node in nodes}
+        node_ids = [node.id for node in nodes]
+        if len(node_ids) != len(set(node_ids)):
+            raise ValueError(f"Duplicate node IDs found: {node_ids}")
+        self.nodes = {node.id: node for node in nodes}
         self.output_id = output_id
         self.trace = trace
         self.topo_order = self._compute_topo_order()
-        # Register parameters
         for node in nodes:
-            if node["op"] in ["linear"]:
-                self.add_module(f"weight_{node['id']}_{id(node['kwargs']['weight'])}", node["kwargs"]["weight"])
-                if "bias" in node["kwargs"] and node["kwargs"]["bias"] is not None:
-                    self.add_module(f"bias_{node['id']}_{id(node['kwargs']['bias'])}", node["kwargs"]["bias"])
-            elif node["op"] in ["add", "mul", "dot"]:
-                if "param" in node["kwargs"]:
-                    self.add_module(f"param_{node['id']}_{id(node['kwargs']['param'])}", node["kwargs"]["param"])
-            elif node["op"] == "concat":
-                # concat now only uses previous node outputs, no params to register
-                pass
+            self.add_module(f"node_{node.id}", node)
 
     def _compute_topo_order(self) -> List[str]:
-        """Compute the topological order of nodes to ensure dependency-respecting execution.
-
-        - Uses depth-first search (DFS) to traverse the graph and produce a list of node IDs in topological order.
-        - Detects cycles in the graph and raises a ValueError if found.
-        - Returns a list of node IDs that can be used to process nodes in the correct order during the forward pass.
-
-        Usage:
-            Called internally during initialization. Not intended for direct use, but ensures forward pass processes nodes
-            in an order where all inputs to a node are computed before the node itself.
-        """
-        graph = {nid: set(node["inputs"]) for nid, node in self.nodes.items()}
+        """Compute the topological order of nodes to ensure dependency-respecting execution."""
+        graph = {node.id: set(node.inputs) for node in self.nodes.values()}
         result = []
         visited = set()
         temp_mark = set()
@@ -96,178 +264,15 @@ class GraphLink(nn.Module):
 
         Returns:
             Output tensor from the node specified by output_id.
-
-        - Processes nodes in topological order, computing each node's output based on its operation and inputs.
-        - Supports operations: input, input_marker, output_marker, linear, add, mul, dot, concat, act, custom.
-        - Automatically infers parameter shapes (e.g., weight, bias) if not specified, or validates specified shapes.
-        - Raises ValueError for invalid shapes or unsupported operations.
-        - If trace=True, prints node ID, operation, and input shapes for debugging.
-
-        Usage:
-            Pass an input tensor to compute the graph's output. Example:
-            model = GraphLink(nodes, output_id="softmax")
-            output = model(torch.randn(8))  # Computes output based on graph structure
         """
         values = {"input": x}
         for nid in self.topo_order:
             node = self.nodes[nid]
-            op = node["op"]
-            inputs = [values[inp] for inp in node["inputs"]]
-            kwargs = node["kwargs"]
+            inputs = [values[inp] for inp in node.inputs]
             if self.trace:
-                print(f"Node {nid}: op={op}, input shapes={[t.shape for t in inputs]}")
-            if op == "input":
-                """Handle input node, which passes the input tensor directly.
-                - Ensures only one node has op='input' and id='input'.
-                - Stores the input tensor in values dictionary.
-                """
-                if nid != "input":
-                    raise ValueError("Only one node can have op='input' with id='input'")
-                values[nid] = x
-            elif op == "input_marker":
-                """Mark the input tensor without modification.
-                - Useful for graphs where input needs to be referenced multiple times.
-                - Stores the input tensor in values dictionary.
-                """
-                values[nid] = x
-            elif op == "output_marker":
-                """Mark the output of the graph.
-                - Passes through the first input (or input tensor if no inputs).
-                - Used to designate the final output node.
-                """
-                values[nid] = inputs[0] if inputs else x
-            elif op == "linear":
-                """Perform a linear transformation: y = xW^T + b.
-                - Infers or validates weight shape as (dim_out, dim_in).
-                - Infers or validates bias shape as (dim_out,) or (1,).
-                - Raises ValueError if shapes are invalid.
-                - Supports automatic shape materialization if shape is None.
-                """
-                dim_in = inputs[0].shape[-1] if inputs[0].dim() >= 1 else 1
-                dim_out = kwargs["dim_out"]
-                weight = kwargs["weight"]
-                if weight.shape is None:
-                    weight._ensure_materialized((dim_out, dim_in))
-                else:
-                    if weight.shape != (dim_out, dim_in):
-                        raise ValueError(f"Invalid weight shape {weight.shape} for node {nid}, possible shapes: [({dim_out}, {dim_in})]")
-                    weight._ensure_materialized((dim_out, dim_in))
-                w_flat = weight.tensor()
-                w_t = w_flat.view(dim_out, dim_in)
-                result = torch.matmul(inputs[0], w_t.T)
-                if "bias" in kwargs and kwargs["bias"] is not None:
-                    bias = kwargs["bias"]
-                    if bias.shape is None:
-                        bias._ensure_materialized((dim_out,))
-                    elif bias.shape == (dim_out,) :
-                        bias._ensure_materialized((dim_out,))
-                    elif bias.shape == (1,):
-                        bias._ensure_materialized((1,))
-                    else:
-                        raise ValueError(f"Invalid bias shape {bias.shape} for node {nid}, possible shapes: [(1,), ({dim_out},)]")
-                    b_t = bias.tensor()
-                    result += b_t
-                values[nid] = result
-            elif op == "add":
-                """Perform element-wise addition.
-                - If 'param' is provided, adds a parameter tensor to the first input.
-                - Otherwise, sums all input tensors (residual-style).
-                - Infers or validates parameter shape as (dim,) or (1,).
-                - Raises ValueError if shapes are invalid.
-                """
-                if "param" in kwargs:
-                    param = kwargs["param"]
-                    dim = inputs[0].shape[-1] if inputs[0].dim() >= 1 else 1
-                    if param.shape is None:
-                        param._ensure_materialized((dim,))
-                    elif param.shape == (dim,):
-                        param._ensure_materialized((dim,))
-                    elif param.shape == (1,):
-                        param._ensure_materialized((1,))
-                    else:
-                        raise ValueError(f"Invalid param shape {param.shape} for node {nid}, possible shapes: [(1,), ({dim},)]")
-                    p_t = param.tensor()
-                    values[nid] = inputs[0] + p_t
-                else:
-                    # Residual-style: sum all inputs
-                    result = inputs[0]
-                    for inp in inputs[1:]:
-                        result = result + inp
-                    values[nid] = result
-            elif op == "mul":
-                """Perform element-wise multiplication.
-                - If 'param' is provided, multiplies the first input by a parameter tensor.
-                - Otherwise, multiplies all input tensors together.
-                - Infers or validates parameter shape as (dim,) or (1,).
-                - Raises ValueError if shapes are invalid.
-                """
-                if "param" in kwargs:
-                    param = kwargs["param"]
-                    dim = inputs[0].shape[-1] if inputs[0].dim() >= 1 else 1
-                    if param.shape is None:
-                        param._ensure_materialized((dim,))
-                    elif param.shape == (dim,):
-                        param._ensure_materialized((dim,))
-                    elif param.shape == (1,):
-                        param._ensure_materialized((1,))
-                    else:
-                        raise ValueError(f"Invalid param shape {param.shape} for node {nid}, possible shapes: [(1,), ({dim},)]")
-                    p_t = param.tensor()
-                    values[nid] = inputs[0] * p_t
-                else:
-                    # Multiply all inputs together
-                    result = inputs[0]
-                    for inp in inputs[1:]:
-                        result = result * inp
-                    values[nid] = result
-            elif op == "dot":
-                """Perform dot product with a parameter tensor.
-                - Computes sum(input * param) along the last dimension.
-                - Infers or validates parameter shape as (dim,) or (1,).
-                - Raises ValueError if shapes are invalid.
-                - Output is a scalar or reduced tensor.
-                """
-                param = kwargs["param"]
-                dim = inputs[0].shape[-1] if inputs[0].dim() >= 1 else 1
-                if param.shape is None:
-                    param._ensure_materialized((dim,))
-                elif param.shape == (dim,):
-                    param._ensure_materialized((dim,))
-                elif param.shape == (1,):
-                    param._ensure_materialized((1,))
-                else:
-                    raise ValueError(f"Invalid param shape {param.shape} for node {nid}, possible shapes: [(1,), ({dim},)]")
-                p_t = param.tensor()
-                values[nid] = torch.sum(inputs[0] * p_t, dim=-1)
-            elif op == "concat":
-                """Concatenate input tensors along the last dimension.
-                - Combines outputs of previous nodes specified in inputs.
-                - No parameters are required.
-                - Output shape is the sum of input dimensions along the last axis.
-                """
-                values[nid] = torch.cat(inputs, dim=-1)
-            elif op == "act":
-                """Apply an activation function to the first input.
-                - Supported activations: 'relu', 'tanh', 'softmax'.
-                - Raises ValueError for unsupported act_type.
-                - Output shape matches input shape (except softmax, which normalizes along last dimension).
-                """
-                act_type = kwargs["act_type"]
-                if act_type == "relu":
-                    values[nid] = torch.relu(inputs[0])
-                elif act_type == "tanh":
-                    values[nid] = torch.tanh(inputs[0])
-                elif act_type == "softmax":
-                    values[nid] = torch.softmax(inputs[0], dim=-1)
-                else:
-                    raise ValueError(f"Unsupported act_type: {act_type}")
-            elif op == "custom":
-                """Apply a custom function to the inputs.
-                - Expects 'fn' in kwargs, a callable that processes the input list.
-                - Output depends on the custom function's implementation.
-                """
-                fn = kwargs["fn"]
-                values[nid] = fn(inputs)
-            else:
-                raise ValueError(f"Unsupported op: {op}")
+                print(f"Node {nid}: op={node.op}, input shapes={[t.shape for t in inputs]}")
+            try:
+                values[nid] = node.forward(inputs, x)
+            except Exception as e:
+                raise RuntimeError(f"[GraphLink] Shape mismatch at node '{node.id}' (op={node.op}), inputs={[t.shape for t in inputs]}: {str(e)}") from e
         return values[self.output_id]

@@ -5,6 +5,12 @@ from units import ParamVec
 from graph_link import Node, GraphLink
 from ml_models import LinearRegressionBlock, LogisticRegressionBlock, SVMBlock
 
+
+class UnsqueezeBlock(torch.nn.Module):
+    def forward(self, x):
+        return x.unsqueeze(-1)
+
+
 class TestGraphStress(unittest.TestCase):
     def test_multiple_branches_concat(self):
         torch.manual_seed(42)
@@ -20,9 +26,9 @@ class TestGraphStress(unittest.TestCase):
         pv_bias4 = ParamVec(shape=4, init="normal", name="b4")
         nodes = [
             Node(id="input", op="input", inputs=[], kwargs={}),
-            Node(id="lin", op="custom", inputs=["input"], kwargs={"fn": lin}),
-            Node(id="logit", op="custom", inputs=["input"], kwargs={"fn": logit}),
-            Node(id="svm", op="custom", inputs=["input"], kwargs={"fn": svm}),
+            Node(id="lin", op="custom_block", inputs=["input"], kwargs={"fn": lin}),
+            Node(id="logit", op="custom_block", inputs=["input"], kwargs={"fn": logit}),
+            Node(id="svm", op="custom_block", inputs=["input"], kwargs={"fn": svm}),
             Node(id="add1", op="add", inputs=["lin"], kwargs={"param": pv_bias5}),
             Node(id="add2", op="add", inputs=["logit"], kwargs={"param": pv_bias3}),
             Node(id="add3", op="add", inputs=["svm"], kwargs={"param": pv_bias4}),
@@ -46,13 +52,13 @@ class TestGraphStress(unittest.TestCase):
         pv_b = ParamVec(shape=6, init="uniform", name="b")
         nodes = [
             Node(id="input", op="input", inputs=[], kwargs={}),
-            Node(id="lin", op="custom", inputs=["input"], kwargs={"fn": lin}),
+            Node(id="lin", op="custom_block", inputs=["input"], kwargs={"fn": lin}),
             Node(id="add", op="add", inputs=["lin"], kwargs={"param": pv_a}),
             Node(id="mul", op="mul", inputs=["add"], kwargs={"param": pv_b}),
             Node(id="relu", op="act", inputs=["mul"], kwargs={"act_type": "relu"}),
-            Node(id="logit", op="custom", inputs=["relu"], kwargs={"fn": logit}),
+            Node(id="logit", op="custom_block", inputs=["relu"], kwargs={"fn": logit}),
             Node(id="concat", op="concat", inputs=["relu", "logit"], kwargs={}),
-            Node(id="svm", op="custom", inputs=["concat"], kwargs={"fn": svm}),
+            Node(id="svm", op="custom_block", inputs=["concat"], kwargs={"fn": svm}),
             Node(id="output", op="output_marker", inputs=["svm"], kwargs={}),
         ]
         graph = GraphLink(nodes, output_id="output", trace=False)
@@ -72,11 +78,11 @@ class TestGraphStress(unittest.TestCase):
         mismatch_node = random.choice(["add", "mul"])
         nodes = [
             Node(id="input", op="input", inputs=[], kwargs={}),
-            Node(id="lin", op="custom", inputs=["input"], kwargs={"fn": lin}),
+            Node(id="lin", op="custom_block", inputs=["input"], kwargs={"fn": lin}),
             Node(id="add", op="add", inputs=["lin"], kwargs={"param": pv_bad if mismatch_node == "add" else pv_good}),
             Node(id="mul", op="mul", inputs=["add"], kwargs={"param": pv_bad if mismatch_node == "mul" else pv_good}),
             Node(id="relu", op="act", inputs=["mul"], kwargs={"act_type": "relu"}),
-            Node(id="logit", op="custom", inputs=["relu"], kwargs={"fn": logit}),
+            Node(id="logit", op="custom_block", inputs=["relu"], kwargs={"fn": logit}),
             Node(id="output", op="output_marker", inputs=["logit"], kwargs={}),
         ]
         graph = GraphLink(nodes, output_id="output", trace=False)
@@ -149,12 +155,12 @@ class TestGraphStress(unittest.TestCase):
         pv_bias8 = ParamVec(shape=8, init="normal", name="b8")
         nodes = [
             Node(id="input", op="input", inputs=[], kwargs={}),
-            Node(id="lin", op="custom", inputs=["input"], kwargs={"fn": lin}),
+            Node(id="lin", op="custom_block", inputs=["input"], kwargs={"fn": lin}),
             Node(id="add1", op="add", inputs=["lin"], kwargs={"param": pv_bias16}),
-            Node(id="logit", op="custom", inputs=["input"], kwargs={"fn": logit}),
+            Node(id="logit", op="custom_block", inputs=["input"], kwargs={"fn": logit}),
             Node(id="add2", op="add", inputs=["logit"], kwargs={"param": pv_bias8}),
             Node(id="concat", op="concat", inputs=["add1", "add2"], kwargs={}),
-            Node(id="svm", op="custom", inputs=["concat"], kwargs={"fn": svm}),
+            Node(id="svm", op="custom_block", inputs=["concat"], kwargs={"fn": svm}),
             Node(id="output", op="output_marker", inputs=["svm"], kwargs={}),
         ]
         graph = GraphLink(nodes, output_id="output", trace=False)
@@ -207,19 +213,19 @@ class TestComplexGraphlink(unittest.TestCase):
             Node(id="input", op="input", inputs=[], kwargs={}),
 
             # branch A
-            Node(id="lin", op="custom", inputs=["input"], kwargs={"fn": lin}),
+            Node(id="lin", op="custom_block", inputs=["input"], kwargs={"fn": lin}),
             Node(id="add_bias", op="add", inputs=["lin"], kwargs={"param": pv_bias8}),
             Node(id="mul_scale", op="mul", inputs=["add_bias"], kwargs={"param": pv_scale8}),
             Node(id="relu", op="act", inputs=["mul_scale"], kwargs={"act_type": "relu"}),
 
             # branch B
-            Node(id="logistic", op="custom", inputs=["input"], kwargs={"fn": logit}),  # (batch, 3)
+            Node(id="logistic", op="custom_block", inputs=["input"], kwargs={"fn": logit}),  # (batch, 3)
 
             # fuse
             Node(id="concat", op="concat", inputs=["relu", "logistic"], kwargs={}),   # (batch, 11)
 
             # head
-            Node(id="svr", op="custom", inputs=["concat"], kwargs={"fn": svm}),       # (batch, 2)
+            Node(id="svr", op="custom_block", inputs=["concat"], kwargs={"fn": svm}),       # (batch, 2)
             Node(id="softmax", op="act", inputs=["svr"], kwargs={"act_type": "softmax"}),
 
             # aux dot branch from lin (before bias/scale) to scalar and concat to 3 channels
@@ -227,7 +233,7 @@ class TestComplexGraphlink(unittest.TestCase):
             # bring (batch,) to (batch,1) by simple trick: concat with itself after a sign -> but simpler:
             # use act: tanh on a reshape is not supported here; instead we can concat via custom tiny module,
             # but keep it simple—PyTorch can unsqueeze inside a custom lambda fn:
-            Node(id="unsq", op="custom", inputs=["dot_score"], kwargs={"fn": lambda xs: xs[0].unsqueeze(-1)}),
+            Node(id="unsq", op="custom_block", inputs=["dot_score"], kwargs={"fn": UnsqueezeBlock()}),
 
             Node(id="concat3", op="concat", inputs=["softmax", "unsq"], kwargs={}),    # (batch, 3)
             Node(id="thresh", op="threshold", inputs=["concat3"], kwargs={"threshold": 0.0}),
@@ -259,7 +265,7 @@ class TestComplexGraphlink(unittest.TestCase):
         # ====== Mismatch branch: build a tiny graph that must fail (bias of size 7 on a 8-D tensor) ======
         bad_nodes = [
             Node(id="input", op="input", inputs=[], kwargs={}),
-            Node(id="lin", op="custom", inputs=["input"], kwargs={"fn": LinearRegressionBlock(out_features=8)}),
+            Node(id="lin", op="custom_block", inputs=["input"], kwargs={"fn": LinearRegressionBlock(out_features=8)}),
             Node(id="bad_add", op="add", inputs=["lin"], kwargs={"param": pv_wrong7}),   # wrong size!
             Node(id="out", op="output_marker", inputs=["bad_add"], kwargs={}),
         ]

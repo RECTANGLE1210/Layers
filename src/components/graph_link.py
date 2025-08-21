@@ -162,9 +162,22 @@ class Node(nn.Module):
                 self.input_shape = [t.shape for t in input_tensors]
                 self.output_shape = tuple(result.shape)
                 return result
-            elif self.op == "custom":
+            elif self.op == "custom_func":
                 fn = self.kwargs["fn"]
-                result = fn(input_tensors)
+                if isinstance(fn, nn.Module) and any(p.requires_grad for p in fn.parameters()):
+                    raise ValueError("custom_func must not be an nn.Module with parameters. Use custom_block instead.")
+                result = fn(input_tensors if len(input_tensors) > 1 else input_tensors[0])
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            elif self.op == "custom_block":
+                block = self.kwargs["fn"]
+                if not isinstance(block, nn.Module):
+                    raise ValueError("custom_block requires an nn.Module instance")
+                if not hasattr(self, "_custom_registered"):
+                    self.add_module(f"custom_{self.id}", block)
+                    self._custom_registered = True
+                result = block(input_tensors[0] if len(input_tensors) == 1 else input_tensors)
                 self.input_shape = [t.shape for t in input_tensors]
                 self.output_shape = tuple(result.shape)
                 return result

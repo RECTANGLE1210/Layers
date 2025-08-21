@@ -3,6 +3,7 @@ from torch import nn
 from typing import Optional
 from units import ParamVec
 
+
 class LinearRegressionBlock(nn.Module):
     """
     Linear Regression Block with ParamVec weights and bias.
@@ -28,28 +29,28 @@ class LinearRegressionBlock(nn.Module):
         self.input_shape_feat = None
         self.output_shape_feat = None
 
-        if in_features is not None:
-            self.weight = ParamVec(
-                shape=(out_features, in_features),
-                init=weight_init,
-                init_kwargs=weight_init_kwargs,
-                name=f"{name}_weight" if name else "linear_weight",
-            )
-            self.bias = ParamVec(
-                shape=(out_features,),
-                init=bias_init,
-                init_kwargs=bias_init_kwargs,
-                name=f"{name}_bias" if name else "linear_bias",
-            )
-        else:
-            self.weight = None
-            self.bias = None
-
         self.weight_init = weight_init
         self.bias_init = bias_init
         self.weight_init_kwargs = weight_init_kwargs
         self.bias_init_kwargs = bias_init_kwargs
         self.name = name
+
+        if in_features is not None:
+            self.weight = ParamVec(
+                (out_features, in_features),
+                init=weight_init,
+                name=f"{name}_weight" if name else "linear_weight",
+                init_kwargs=weight_init_kwargs,
+            )
+            self.bias = ParamVec(
+                (out_features,),
+                init=bias_init,
+                name=f"{name}_bias" if name else "linear_bias",
+                init_kwargs=bias_init_kwargs,
+            )
+        else:
+            self.weight = None
+            self.bias = None
 
     def forward(self, inputs) -> torch.Tensor:
         """
@@ -66,17 +67,19 @@ class LinearRegressionBlock(nn.Module):
             in_features = x.shape[-1]
             self.in_features = in_features
             self.weight = ParamVec(
-                shape=(self.out_features, in_features),
+                (self.out_features, in_features),
                 init=self.weight_init,
-                init_kwargs=self.weight_init_kwargs,
                 name=f"{self.name}_weight" if self.name else "linear_weight",
+                init_kwargs=self.weight_init_kwargs,
             )
             self.bias = ParamVec(
-                shape=(self.out_features,),
+                (self.out_features,),
                 init=self.bias_init,
-                init_kwargs=self.bias_init_kwargs,
                 name=f"{self.name}_bias" if self.name else "linear_bias",
+                init_kwargs=self.bias_init_kwargs,
             )
+            self.add_module("weight", self.weight)
+            self.add_module("bias", self.bias)
         else:
             if x.shape[-1] != self.in_features:
                 raise ValueError(f"Expected input dimension {self.in_features}, got {x.shape[-1]}")
@@ -115,28 +118,28 @@ class LogisticRegressionBlock(nn.Module):
         self.input_shape_feat = None
         self.output_shape_feat = None
 
-        if in_features is not None:
-            self.weight = ParamVec(
-                shape=(out_features, in_features),
-                init=weight_init,
-                init_kwargs=weight_init_kwargs,
-                name=f"{name}_weight" if name else "logistic_weight",
-            )
-            self.bias = ParamVec(
-                shape=(out_features,),
-                init=bias_init,
-                init_kwargs=bias_init_kwargs,
-                name=f"{name}_bias" if name else "logistic_bias",
-            )
-        else:
-            self.weight = None
-            self.bias = None
-
         self.weight_init = weight_init
         self.bias_init = bias_init
         self.weight_init_kwargs = weight_init_kwargs
         self.bias_init_kwargs = bias_init_kwargs
         self.name = name
+
+        if in_features is not None:
+            self.weight = ParamVec(
+                (out_features, in_features),
+                init=weight_init,
+                name=f"{name}_weight" if name else "logistic_weight",
+                init_kwargs=weight_init_kwargs,
+            )
+            self.bias = ParamVec(
+                (out_features,),
+                init=bias_init,
+                name=f"{name}_bias" if name else "logistic_bias",
+                init_kwargs=bias_init_kwargs,
+            )
+        else:
+            self.weight = None
+            self.bias = None
 
     def forward(self, inputs) -> torch.Tensor:
         """
@@ -153,17 +156,19 @@ class LogisticRegressionBlock(nn.Module):
             in_features = x.shape[-1]
             self.in_features = in_features
             self.weight = ParamVec(
-                shape=(self.out_features, in_features),
+                (self.out_features, in_features),
                 init=self.weight_init,
-                init_kwargs=self.weight_init_kwargs,
                 name=f"{self.name}_weight" if self.name else "logistic_weight",
+                init_kwargs=self.weight_init_kwargs,
             )
             self.bias = ParamVec(
-                shape=(self.out_features,),
+                (self.out_features,),
                 init=self.bias_init,
-                init_kwargs=self.bias_init_kwargs,
                 name=f"{self.name}_bias" if self.name else "logistic_bias",
+                init_kwargs=self.bias_init_kwargs,
             )
+            self.add_module("weight", self.weight)
+            self.add_module("bias", self.bias)
         else:
             if x.shape[-1] != self.in_features:
                 raise ValueError(f"Expected input dimension {self.in_features}, got {x.shape[-1]}")
@@ -214,26 +219,24 @@ class SVMBlock(nn.Module):
         self.input_shape_feat = None
         self.output_shape_feat = None
 
+        self.weight_init = weight_init
+        self.bias_init = bias_init
+        self.name = name
+
         if in_features is not None:
             self.weight = ParamVec(
-                shape=(out_features, in_features),
+                (out_features, in_features),
                 init=weight_init,
-                init_kwargs=None,
                 name=f"{name}_weight" if name else "svm_weight",
             )
             self.bias = ParamVec(
-                shape=(out_features,),
+                (out_features,),
                 init=bias_init,
-                init_kwargs=None,
                 name=f"{name}_bias" if name else "svm_bias",
             )
         else:
             self.weight = None
             self.bias = None
-
-        self.weight_init = weight_init
-        self.bias_init = bias_init
-        self.name = name
 
     def compute_kernel(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
         """
@@ -274,17 +277,17 @@ class SVMBlock(nn.Module):
             in_features = x.shape[-1]
             self.in_features = in_features
             self.weight = ParamVec(
-                shape=(self.out_features, in_features),
+                (self.out_features, in_features),
                 init=self.weight_init,
-                init_kwargs=None,
                 name=f"{self.name}_weight" if self.name else "svm_weight",
             )
             self.bias = ParamVec(
-                shape=(self.out_features,),
+                (self.out_features,),
                 init=self.bias_init,
-                init_kwargs=None,
                 name=f"{self.name}_bias" if self.name else "svm_bias",
             )
+            self.add_module("weight", self.weight)
+            self.add_module("bias", self.bias)
         else:
             if x.shape[-1] != self.in_features:
                 raise ValueError(f"Expected input dimension {self.in_features}, got {x.shape[-1]}")

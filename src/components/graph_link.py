@@ -157,6 +157,8 @@ class Node(nn.Module):
                     result = torch.tanh(input_tensors[0])
                 elif act_type == "softmax":
                     result = torch.softmax(input_tensors[0], dim=-1)
+                elif act_type == "sigmoid":
+                    result = torch.sigmoid(input_tensors[0])
                 else:
                     raise ValueError(f"Unsupported act_type: {act_type}")
                 self.input_shape = [t.shape for t in input_tensors]

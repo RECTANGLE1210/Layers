@@ -63,10 +63,10 @@ class TestGraphLink(unittest.TestCase):
         graph = GraphLink(nodes, output_id="softmax", trace=True)
 
         x = torch.randn(8, 8)
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(RuntimeError) as context:
             out = graph(x)
 
-        expected_error = "Invalid weight shape (4, 5) for node linear1, possible shapes: [(4, 8)]"
+        expected_error = "[GraphLink] Shape mismatch at node 'linear1' (op=linear), inputs=[torch.Size([8, 8])]: [GraphLink] Error in node 'linear1' (op=linear): Invalid weight shape (4, 5) for node linear1, possible shapes: [(4, 8)]"
         self.assertEqual(str(context.exception), expected_error)
 
     def test_residual_block_no_shape(self):
@@ -134,9 +134,9 @@ class TestGraphLink(unittest.TestCase):
         ]
         graph = GraphLink(nodes, output_id="output", trace=True)
         x = torch.randn(batch_size, input_dim)
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(RuntimeError) as context:
             out = graph(x)
-        expected_error = f"Invalid weight shape ({input_dim}, 10) for node linear1, possible shapes: [({input_dim}, {input_dim})]"
+        expected_error = f"[GraphLink] Shape mismatch at node 'linear1' (op=linear), inputs=[torch.Size([{batch_size}, {input_dim}])]: [GraphLink] Error in node 'linear1' (op=linear): Invalid weight shape ({input_dim}, 10) for node linear1, possible shapes: [({input_dim}, {input_dim})]"
         self.assertEqual(str(context.exception), expected_error)
 
 if __name__ == "__main__":

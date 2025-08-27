@@ -25,7 +25,7 @@ class TestGraphStress(unittest.TestCase):
         pv_bias3 = ParamVec(shape=3, init="normal", name="b3")
         pv_bias4 = ParamVec(shape=4, init="normal", name="b4")
         nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (batch, in_dim)}),
             Node(id="lin", op="custom_block", inputs=["input"], kwargs={"fn": lin}),
             Node(id="logit", op="custom_block", inputs=["input"], kwargs={"fn": logit}),
             Node(id="svm", op="custom_block", inputs=["input"], kwargs={"fn": svm}),
@@ -51,7 +51,7 @@ class TestGraphStress(unittest.TestCase):
         pv_a = ParamVec(shape=6, init="ones", name="a")
         pv_b = ParamVec(shape=6, init="uniform", name="b")
         nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (batch, in_dim)}),
             Node(id="lin", op="custom_block", inputs=["input"], kwargs={"fn": lin}),
             Node(id="add", op="add", inputs=["lin"], kwargs={"param": pv_a}),
             Node(id="mul", op="mul", inputs=["add"], kwargs={"param": pv_b}),
@@ -77,7 +77,7 @@ class TestGraphStress(unittest.TestCase):
         import random
         mismatch_node = random.choice(["add", "mul"])
         nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (batch, in_dim)}),
             Node(id="lin", op="custom_block", inputs=["input"], kwargs={"fn": lin}),
             Node(id="add", op="add", inputs=["lin"], kwargs={"param": pv_bad if mismatch_node == "add" else pv_good}),
             Node(id="mul", op="mul", inputs=["add"], kwargs={"param": pv_bad if mismatch_node == "mul" else pv_good}),
@@ -101,7 +101,7 @@ class TestGraphStress(unittest.TestCase):
         pv2 = ParamVec(shape=5, init="ones", name="p2")  # changed shape from 3 to 5
         pv3 = ParamVec(shape=5, init="ones", name="p3")
         nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (batch, in_dim)}),
             Node(id="add1", op="add", inputs=["input"], kwargs={"param": pv3}),
             Node(id="mul1", op="mul", inputs=["add1"], kwargs={"param": pv3}),
             Node(id="add2", op="add", inputs=["input"], kwargs={"param": pv2}),
@@ -126,7 +126,7 @@ class TestGraphStress(unittest.TestCase):
         pv2 = ParamVec(shape=3, init="ones", name="p2")  # original shape 3 to provoke mismatch
         pv3 = ParamVec(shape=5, init="ones", name="p3")
         nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (batch, in_dim)}),
             Node(id="add1", op="add", inputs=["input"], kwargs={"param": pv3}),
             Node(id="mul1", op="mul", inputs=["add1"], kwargs={"param": pv3}),
             Node(id="add2", op="add", inputs=["input"], kwargs={"param": pv2}),
@@ -154,7 +154,7 @@ class TestGraphStress(unittest.TestCase):
         pv_bias16 = ParamVec(shape=16, init="normal", name="b16")
         pv_bias8 = ParamVec(shape=8, init="normal", name="b8")
         nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (batch, in_dim)}),
             Node(id="lin", op="custom_block", inputs=["input"], kwargs={"fn": lin}),
             Node(id="add1", op="add", inputs=["lin"], kwargs={"param": pv_bias16}),
             Node(id="logit", op="custom_block", inputs=["input"], kwargs={"fn": logit}),
@@ -210,7 +210,7 @@ class TestComplexGraphlink(unittest.TestCase):
         # threshold(y, 0.0) -> y_bin (float 0/1, batch, 3) -> output
 
         nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (batch, in_dim)}),
 
             # branch A
             Node(id="lin", op="custom_block", inputs=["input"], kwargs={"fn": lin}),
@@ -264,7 +264,7 @@ class TestComplexGraphlink(unittest.TestCase):
 
         # ====== Mismatch branch: build a tiny graph that must fail (bias of size 7 on a 8-D tensor) ======
         bad_nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (4, in_dim)}),
             Node(id="lin", op="custom_block", inputs=["input"], kwargs={"fn": LinearRegressionBlock(out_features=8)}),
             Node(id="bad_add", op="add", inputs=["lin"], kwargs={"param": pv_wrong7}),   # wrong size!
             Node(id="out", op="output_marker", inputs=["bad_add"], kwargs={}),

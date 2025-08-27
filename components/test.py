@@ -13,8 +13,11 @@ class TestGraphLink(unittest.TestCase):
         weight2 = ParamVec(shape=None, init="xavier_uniform", init_kwargs={"fan_out": 4})
         bias2 = ParamVec(shape=None, init="zeros")
 
+        batch_size = 8
+        input_dim = 1
+
         nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (batch_size, input_dim)}),
             Node(id="linear1", op="linear", inputs=["input"], kwargs={"dim_out": 4, "weight": weight1, "bias": bias1}),
             Node(id="linear2", op="linear", inputs=["input"], kwargs={"dim_out": 4, "weight": weight2, "bias": bias2}),
             Node(id="concat", op="concat", inputs=["linear1", "linear2"], kwargs={}),
@@ -22,9 +25,9 @@ class TestGraphLink(unittest.TestCase):
         ]
         graph = GraphLink(nodes, output_id="softmax", trace=True)
 
-        x = torch.randn(8, 1)  # batch_size=8, input_dim=1
+        x = torch.randn(batch_size, input_dim)  # batch_size=8, input_dim=1
         out = graph(x)
-        self.assertEqual(out.shape, (8, 8))  # concat 2*4 output => shape (8,8)
+        self.assertEqual(out.shape, (batch_size, 8))  # concat 2*4 output => shape (8,8)
 
     def test_dag_correct_shape(self):
         # User specifies correct shape
@@ -33,8 +36,11 @@ class TestGraphLink(unittest.TestCase):
         weight2 = ParamVec(shape=(4, 8), init="xavier_uniform", init_kwargs={"fan_out": 4})
         bias2 = ParamVec(shape=(4,), init="zeros")
 
+        batch_size = 8
+        input_dim = 8
+
         nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (batch_size, input_dim)}),
             Node(id="linear1", op="linear", inputs=["input"], kwargs={"dim_out": 4, "weight": weight1, "bias": bias1}),
             Node(id="linear2", op="linear", inputs=["input"], kwargs={"dim_out": 4, "weight": weight2, "bias": bias2}),
             Node(id="concat", op="concat", inputs=["linear1", "linear2"], kwargs={}),
@@ -42,9 +48,9 @@ class TestGraphLink(unittest.TestCase):
         ]
         graph = GraphLink(nodes, output_id="softmax", trace=True)
 
-        x = torch.randn(8, 8)
+        x = torch.randn(batch_size, input_dim)
         out = graph(x)
-        self.assertEqual(out.shape, (8, 8))
+        self.assertEqual(out.shape, (batch_size, 8))
 
     def test_dag_incorrect_shape(self):
         # User specifies incorrect shape (should raise exception)
@@ -53,8 +59,11 @@ class TestGraphLink(unittest.TestCase):
         weight2 = ParamVec(shape=(4, 8), init="xavier_uniform", init_kwargs={"fan_out": 4})
         bias2 = ParamVec(shape=(4,), init="zeros")
 
+        batch_size = 8
+        input_dim = 8
+
         nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (batch_size, input_dim)}),
             Node(id="linear1", op="linear", inputs=["input"], kwargs={"dim_out": 4, "weight": weight1, "bias": bias1}),
             Node(id="linear2", op="linear", inputs=["input"], kwargs={"dim_out": 4, "weight": weight2, "bias": bias2}),
             Node(id="concat", op="concat", inputs=["linear1", "linear2"], kwargs={}),
@@ -62,7 +71,7 @@ class TestGraphLink(unittest.TestCase):
         ]
         graph = GraphLink(nodes, output_id="softmax", trace=True)
 
-        x = torch.randn(8, 8)
+        x = torch.randn(batch_size, input_dim)
         with self.assertRaises(RuntimeError) as context:
             out = graph(x)
 
@@ -79,7 +88,7 @@ class TestGraphLink(unittest.TestCase):
         bias2 = ParamVec(shape=None, init="zeros")
 
         nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (batch_size, input_dim)}),
             Node(id="linear1", op="linear", inputs=["input"], kwargs={"dim_out": input_dim, "weight": weight1, "bias": bias1}),
             Node(id="relu", op="act", inputs=["linear1"], kwargs={"act_type": "relu"}),
             Node(id="linear2", op="linear", inputs=["relu"], kwargs={"dim_out": input_dim, "weight": weight2, "bias": bias2}),
@@ -102,7 +111,7 @@ class TestGraphLink(unittest.TestCase):
         bias2 = ParamVec(shape=(input_dim,), init="zeros")
 
         nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (batch_size, input_dim)}),
             Node(id="linear1", op="linear", inputs=["input"], kwargs={"dim_out": input_dim, "weight": weight1, "bias": bias1}),
             Node(id="relu", op="act", inputs=["linear1"], kwargs={"act_type": "relu"}),
             Node(id="linear2", op="linear", inputs=["relu"], kwargs={"dim_out": input_dim, "weight": weight2, "bias": bias2}),
@@ -125,7 +134,7 @@ class TestGraphLink(unittest.TestCase):
         bias2 = ParamVec(shape=(input_dim,), init="zeros")
 
         nodes = [
-            Node(id="input", op="input", inputs=[], kwargs={}),
+            Node(id="input", op="input", inputs=[], kwargs={"input_shape": (batch_size, input_dim)}),
             Node(id="linear1", op="linear", inputs=["input"], kwargs={"dim_out": input_dim, "weight": weight1, "bias": bias1}),
             Node(id="relu", op="act", inputs=["linear1"], kwargs={"act_type": "relu"}),
             Node(id="linear2", op="linear", inputs=["relu"], kwargs={"dim_out": input_dim, "weight": weight2, "bias": bias2}),

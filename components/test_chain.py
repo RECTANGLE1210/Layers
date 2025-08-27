@@ -22,7 +22,7 @@ def build_paramvec_combo_graph():
     pv_fusion = ParamVec(shape=5, init="normal", name="fusion_bias")
 
     nodes = [
-        Node(id="input", op="input", inputs=[], kwargs={}),
+        Node(id="input", op="input", inputs=[], kwargs={"input_shape": (2, 7)}),
         # ML blocks
         Node(id="lin", op="custom_block", inputs=["input"], kwargs={"fn": lin}),
         Node(id="logit", op="custom_block", inputs=["input"], kwargs={"fn": logit}),
@@ -46,10 +46,7 @@ def build_paramvec_combo_graph():
 
 if __name__ == "__main__":
     model = build_paramvec_combo_graph()
-
-    # ép lazy init
-    x = torch.randn(2, 7)   # batch=2, in_features=7
-    _ = model(x)
-
+    dummy_tensor = torch.rand(2,7)
+    _ = model(dummy_tensor)
     summary(model, input_size=(2, 7),
             col_names=("input_size", "output_size", "num_params"))

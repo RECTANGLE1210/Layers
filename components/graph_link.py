@@ -23,6 +23,11 @@ class Node(nn.Module):
         self.kwargs = kwargs
         self.input_shape = None
         self.output_shape = None
+        # Enforce input_shape for input and input_marker ops
+        if self.op in ["input", "input_marker"]:
+            if "input_shape" not in self.kwargs:
+                raise ValueError(f"Node with op='{self.op}' must have 'input_shape' specified in kwargs")
+            self.input_shape = tuple(self.kwargs["input_shape"])
         self._register_parameters()
 
     def _register_parameters(self):
@@ -52,14 +57,20 @@ class Node(nn.Module):
             if self.op == "input":
                 if self.id != "input":
                     raise ValueError("Only one node can have op='input' with id='input'")
+                if x is None:
+                    raise ValueError("Input tensor 'x' must be provided for 'input' node")
+                if tuple(x.shape) != self.input_shape:
+                    raise ValueError(f"Input tensor shape {tuple(x.shape)} does not match declared input_shape {self.input_shape} for node '{self.id}'")
                 result = x
-                self.input_shape = None
-                self.output_shape = tuple(result.shape) if result is not None else None
+                self.output_shape = tuple(result.shape)
                 return result
             elif self.op == "input_marker":
+                if x is None:
+                    raise ValueError("Input tensor 'x' must be provided for 'input_marker' node")
+                if tuple(x.shape) != self.input_shape:
+                    raise ValueError(f"Input tensor shape {tuple(x.shape)} does not match declared input_shape {self.input_shape} for node '{self.id}'")
                 result = x
-                self.input_shape = None
-                self.output_shape = tuple(result.shape) if result is not None else None
+                self.output_shape = tuple(result.shape)
                 return result
             elif self.op == "output_marker":
                 result = input_tensors[0] if input_tensors else x

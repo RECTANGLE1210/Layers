@@ -1,0 +1,116 @@
+{
+  "nodes": [
+    {
+      "id": "input",
+      "op": "input",
+      "inputs": [],
+      "kwargs": {}
+    },
+    {
+      "id": "linear1",
+      "op": "linear",
+      "inputs": ["input"],
+      "kwargs": {
+        "dim_out": 4,
+        "weight": {
+          "shape": [4, 8],
+          "init": "xavier_uniform",
+          "init_kwargs": {"fan_out": 4},
+          "name": "w1",
+          "freeze": false
+        },
+        "bias": {
+          "shape": [4],
+          "init": "zeros",
+          "name": "b1",
+          "freeze": false
+        }
+      }
+    },
+    {
+      "id": "relu",
+      "op": "act",
+      "inputs": ["linear1"],
+      "kwargs": {
+        "act_type": "relu"
+      }
+    },
+    {
+      "id": "linear2",
+      "op": "linear",
+      "inputs": ["relu"],
+      "kwargs": {
+        "dim_out": 4,
+        "weight": {
+          "shape": [4, 4],
+          "init": "xavier_uniform",
+          "init_kwargs": {"fan_out": 4},
+          "name": "w2",
+          "freeze": false
+        },
+        "bias": {
+          "shape": [4],
+          "init": "zeros",
+          "name": "b2",
+          "freeze": false
+        }
+      }
+    },
+    {
+      "id": "linear3",
+      "op": "linear",
+      "inputs": ["input"],
+      "kwargs": {
+        "dim_out": 4,
+        "weight": {
+          "shape": [4, 8],
+          "init": "xavier_uniform",
+          "init_kwargs": {"fan_out": 4},
+          "name": "w3",
+          "freeze": false
+        },
+        "bias": {
+          "shape": [4],
+          "init": "zeros",
+          "name": "b3",
+          "freeze": false
+        }
+      }
+    },
+    {
+      "id": "concat",
+      "op": "concat",
+      "inputs": ["linear2", "linear3"],
+      "kwargs": {}
+    },
+    {
+      "id": "softmax",
+      "op": "act",
+      "inputs": ["concat"],
+      "kwargs": {
+        "act_type": "softmax"
+      }
+    },
+    {
+      "id": "add",
+      "op": "add",
+      "inputs": ["softmax", "linear3"],
+      "kwargs": {
+        "param": {
+          "shape": [8],
+          "init": "normal",
+          "init_kwargs": {"mean": 0.0, "std": 0.02},
+          "name": "extra_bias",
+          "freeze": false
+        }
+      }
+    },
+    {
+      "id": "output",
+      "op": "output_marker",
+      "inputs": ["add"],
+      "kwargs": {}
+    }
+  ],
+  "output_id": "output"
+}

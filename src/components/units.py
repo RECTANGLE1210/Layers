@@ -17,7 +17,7 @@ class ParamVec(nn.Module):
         device: Device for the parameter.
         name: Logical name for debugging.
         dropout_rate: Meta attribute for dropout rate (stored but not applied).
-        freeze: Meta attribute for freeze (stored but not applied).
+        freeze: Boolean meta attribute indicating if parameter is frozen (stored but not applied). Defaults to False.
 
     Attributes:
         param: The underlying nn.Parameter (None if lazy).
@@ -34,7 +34,7 @@ class ParamVec(nn.Module):
         device: Union[torch.device, str, None] = None,
         name: Optional[str] = None,
         dropout_rate: Optional[float] = None,
-        freeze: Optional[bool] = None,
+        freeze: bool = False,
     ):
         super().__init__()
         # Convert shape argument to tuple if int
@@ -117,7 +117,8 @@ class ParamVec(nn.Module):
                 tensor.uniform_(a, b)
             else:
                 raise ValueError(f"Unsupported init: {self._init}")
-        self._param = nn.Parameter(tensor, requires_grad=True)
+        requires_grad = not self.meta.get("freeze", False)
+        self._param = nn.Parameter(tensor, requires_grad=requires_grad)
         self._shape = shape
         self.register_parameter("_param", self._param)
 

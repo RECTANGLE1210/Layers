@@ -20,6 +20,7 @@ class LinearRegressionBlock(nn.Module):
         weight_init_kwargs: Optional[dict] = None,
         bias_init_kwargs: Optional[dict] = None,
         name: Optional[str] = None,
+        freeze: bool = False,
     ):
         super().__init__()
         self.in_features = in_features
@@ -34,6 +35,7 @@ class LinearRegressionBlock(nn.Module):
         self.weight_init_kwargs = weight_init_kwargs
         self.bias_init_kwargs = bias_init_kwargs
         self.name = name
+        self.freeze = freeze
 
         if in_features is not None:
             self.weight = ParamVec(
@@ -41,12 +43,14 @@ class LinearRegressionBlock(nn.Module):
                 init=weight_init,
                 name=f"{name}_weight" if name else "linear_weight",
                 init_kwargs=weight_init_kwargs,
+                freeze=freeze,
             )
             self.bias = ParamVec(
                 (out_features,),
                 init=bias_init,
                 name=f"{name}_bias" if name else "linear_bias",
                 init_kwargs=bias_init_kwargs,
+                freeze=freeze,
             )
         else:
             self.weight = None
@@ -71,12 +75,14 @@ class LinearRegressionBlock(nn.Module):
                 init=self.weight_init,
                 name=f"{self.name}_weight" if self.name else "linear_weight",
                 init_kwargs=self.weight_init_kwargs,
+                freeze=self.freeze,
             )
             self.bias = ParamVec(
                 (self.out_features,),
                 init=self.bias_init,
                 name=f"{self.name}_bias" if self.name else "linear_bias",
                 init_kwargs=self.bias_init_kwargs,
+                freeze=self.freeze,
             )
             self.add_module("weight", self.weight)
             self.add_module("bias", self.bias)
@@ -109,6 +115,7 @@ class LogisticRegressionBlock(nn.Module):
         weight_init_kwargs: Optional[dict] = None,
         bias_init_kwargs: Optional[dict] = None,
         name: Optional[str] = None,
+        freeze: bool = False,
     ):
         super().__init__()
         self.in_features = in_features
@@ -123,6 +130,7 @@ class LogisticRegressionBlock(nn.Module):
         self.weight_init_kwargs = weight_init_kwargs
         self.bias_init_kwargs = bias_init_kwargs
         self.name = name
+        self.freeze = freeze
 
         if in_features is not None:
             self.weight = ParamVec(
@@ -130,12 +138,14 @@ class LogisticRegressionBlock(nn.Module):
                 init=weight_init,
                 name=f"{name}_weight" if name else "logistic_weight",
                 init_kwargs=weight_init_kwargs,
+                freeze=freeze,
             )
             self.bias = ParamVec(
                 (out_features,),
                 init=bias_init,
                 name=f"{name}_bias" if name else "logistic_bias",
                 init_kwargs=bias_init_kwargs,
+                freeze=freeze,
             )
         else:
             self.weight = None
@@ -160,12 +170,14 @@ class LogisticRegressionBlock(nn.Module):
                 init=self.weight_init,
                 name=f"{self.name}_weight" if self.name else "logistic_weight",
                 init_kwargs=self.weight_init_kwargs,
+                freeze=self.freeze,
             )
             self.bias = ParamVec(
                 (self.out_features,),
                 init=self.bias_init,
                 name=f"{self.name}_bias" if self.name else "logistic_bias",
                 init_kwargs=self.bias_init_kwargs,
+                freeze=self.freeze,
             )
             self.add_module("weight", self.weight)
             self.add_module("bias", self.bias)
@@ -202,6 +214,7 @@ class SVMBlock(nn.Module):
         weight_init: str = "xavier_normal",
         bias_init: str = "zeros",
         name: Optional[str] = None,
+        freeze: bool = False,
     ):
         super().__init__()
         if mode not in ("SVC", "SVR"):
@@ -222,17 +235,20 @@ class SVMBlock(nn.Module):
         self.weight_init = weight_init
         self.bias_init = bias_init
         self.name = name
+        self.freeze = freeze
 
         if in_features is not None:
             self.weight = ParamVec(
                 (out_features, in_features),
                 init=weight_init,
                 name=f"{name}_weight" if name else "svm_weight",
+                freeze=freeze,
             )
             self.bias = ParamVec(
                 (out_features,),
                 init=bias_init,
                 name=f"{name}_bias" if name else "svm_bias",
+                freeze=freeze,
             )
         else:
             self.weight = None
@@ -280,11 +296,13 @@ class SVMBlock(nn.Module):
                 (self.out_features, in_features),
                 init=self.weight_init,
                 name=f"{self.name}_weight" if self.name else "svm_weight",
+                freeze=self.freeze,
             )
             self.bias = ParamVec(
                 (self.out_features,),
                 init=self.bias_init,
                 name=f"{self.name}_bias" if self.name else "svm_bias",
+                freeze=self.freeze,
             )
             self.add_module("weight", self.weight)
             self.add_module("bias", self.bias)

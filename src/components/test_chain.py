@@ -6,7 +6,7 @@ from graph_link import Node, GraphLink
 from ml_models import LinearRegressionBlock, LogisticRegressionBlock, SVMBlock
 
 def build_paramvec_combo_graph():
-    lin = LinearRegressionBlock(out_features=5)
+    lin = LinearRegressionBlock(out_features=5, freeze=True)
     logit = LogisticRegressionBlock(out_features=3)
     svm = SVMBlock(out_features=4, mode="SVR")
 

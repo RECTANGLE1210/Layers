@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 
 from components.graph_link import Node, GraphLink
+from components.ml_models import LinearRegressionBlock, LogisticRegressionBlock, SVMBlock
 from components.units import ParamVec
 
 # ---------------- FastAPI init ----------------
@@ -45,7 +46,7 @@ def build_graphlink_from_json(graph_json: GraphSchema) -> GraphLink:
     for n in graph_json.nodes:
         kwargs = {}
         for k, v in n.kwargs.items():
-            if isinstance(v, dict) and "init" in v:  # coi như ParamVec
+            if isinstance(v, dict) and "init" in v:  # ParamVec
                 kwargs[k] = ParamVec(
                     shape=v.get("shape", None),
                     init=v.get("init", "xavier_uniform"),
@@ -55,9 +56,21 @@ def build_graphlink_from_json(graph_json: GraphSchema) -> GraphLink:
                 )
             else:
                 kwargs[k] = v
+
+        # Nếu là custom_block thì khởi tạo ML block từ "fn"
+        if n.op == "custom_block":
+            fn_name = kwargs.pop("fn", None)
+            if fn_name == "LinearRegressionBlock":
+                block_instance = LinearRegressionBlock(**kwargs)
+            elif fn_name == "LogisticRegressionBlock":
+                block_instance = LogisticRegressionBlock(**kwargs)
+            elif fn_name == "SVMBlock":
+                block_instance = SVMBlock(**kwargs)
+            else:
+                raise ValueError(f"Unsupported custom block type: {fn_name}")
+            kwargs = {"fn": block_instance}
         nodes.append(Node(id=n.id, op=n.op, inputs=n.inputs, kwargs=kwargs))
     return GraphLink(nodes, output_id=graph_json.output_id)
-
 
 # Save model metadata as JSON in storage/{model_id}.json and return filepath
 def save_model_metadata(model_id: str, graph: GraphSchema, model: GraphLink) -> str:
@@ -87,7 +100,17 @@ def create_model(graph: GraphSchema):
         model_id = str(uuid.uuid4())
         MODEL_REGISTRY[model_id] = model
         filepath = save_model_metadata(model_id, graph, model)
-        return {"status": "succeeded", "model_id": model_id, "metadata_path": filepath}
+        input_shape = None
+        for n in graph.nodes:
+            if n.op == "input":
+                input_shape = n.kwargs.get("input_shape", None)
+                break
+        return {
+            "status": "succeeded",
+            "model_id": model_id,
+            "metadata_path": filepath,
+            "input_shape": input_shape,
+        }
     except Exception as e:
         return {"status": "failed", "error": str(e)}
 
@@ -100,6 +123,17 @@ def get_model_info(model_id: str):
                 metadata = json.load(f)
             metadata["status"] = "succeeded"
             metadata["metadata_path"] = filepath
+            input_shape = next((n["kwargs"].get("input_shape") for n in metadata["raw_config"]["nodes"] if n["op"] == "input"),None)
+            dummy_tensor = torch.rand(input_shape)
+            # 2. Lấy raw_config ra và parse thành GraphSchema
+            graph_json = GraphSchema(**metadata["raw_config"])
+            # 3. Build model từ JSON
+            model = build_graphlink_from_json(graph_json)
+            _ = model(dummy_tensor)
+            total_params = sum(p.numel() for p in model.parameters())
+            metadata["num_params"] = total_params
+            with open(filepath, "w") as f:
+                json.dump(metadata, f, indent=2)
             return metadata
         except Exception as e:
             return {"status": "failed", "error": str(e)}

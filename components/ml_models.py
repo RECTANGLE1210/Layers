@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from typing import Optional
-from units import ParamVec
+from components.units import ParamVec
 
 
 class LinearRegressionBlock(nn.Module):

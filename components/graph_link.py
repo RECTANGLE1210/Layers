@@ -42,6 +42,7 @@ class Node(nn.Module):
         elif self.op == "concat":
             # concat uses no parameters
             pass
+        # flatten uses no parameters
 
     def forward(self, input_tensors: List[torch.Tensor], x: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Compute the node's output based on its operation and inputs.
@@ -157,6 +158,12 @@ class Node(nn.Module):
                 return result
             elif self.op == "concat":
                 result = torch.cat(input_tensors, dim=-1)
+                self.input_shape = [t.shape for t in input_tensors]
+                self.output_shape = tuple(result.shape)
+                return result
+            elif self.op == "flatten":
+                # Flatten the first input tensor starting from dimension 1
+                result = input_tensors[0].flatten(start_dim=1)
                 self.input_shape = [t.shape for t in input_tensors]
                 self.output_shape = tuple(result.shape)
                 return result

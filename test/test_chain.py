@@ -1,9 +1,9 @@
 import torch
 from torchinfo import summary
 
-from units import ParamVec
-from graph_link import Node, GraphLink
-from ml_models import LinearRegressionBlock, LogisticRegressionBlock, SVMBlock
+from components.units import ParamVec
+from components.graph_link import Node, GraphLink
+from components.ml_models import LinearRegressionBlock, LogisticRegressionBlock, SVMBlock
 
 def build_paramvec_combo_graph():
     lin = LinearRegressionBlock(out_features=5, freeze=True)

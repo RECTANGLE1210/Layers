@@ -1,9 +1,9 @@
 import unittest
 import torch
 
-from units import ParamVec
-from graph_link import Node, GraphLink
-from ml_models import LinearRegressionBlock, LogisticRegressionBlock, SVMBlock
+from components.units import ParamVec
+from components.graph_link import Node, GraphLink
+from components.ml_models import LinearRegressionBlock, LogisticRegressionBlock, SVMBlock
 
 
 class UnsqueezeBlock(torch.nn.Module):
@@ -166,13 +166,6 @@ class TestGraphStress(unittest.TestCase):
         graph = GraphLink(nodes, output_id="output", trace=False)
         y = graph(x)
         self.assertEqual(y.shape, (batch, 4))
-import unittest
-import torch
-
-from units import ParamVec
-from graph_link import Node, GraphLink
-from ml_models import LinearRegressionBlock, LogisticRegressionBlock, SVMBlock
-
 
 class TestComplexGraphlink(unittest.TestCase):
     def test_end_to_end_with_mismatch_branch(self):

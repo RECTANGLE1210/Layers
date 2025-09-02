@@ -1,8 +1,8 @@
 import unittest
 import torch
 
-from graph_link import Node, GraphLink
-from units import ParamVec
+from components.graph_link import Node, GraphLink
+from components.units import ParamVec
 
 class TestGraphLink(unittest.TestCase):
 

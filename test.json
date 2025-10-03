@@ -1,0 +1,134 @@
+{
+  "nodes": [
+    {
+      "id": "input",
+      "op": "input",
+      "inputs": [],
+      "kwargs": {
+        "input_shape": [2, 7]
+      }
+    },
+    {
+      "id": "lin",
+      "op": "custom_block",
+      "inputs": ["input"],
+      "kwargs": {
+        "fn": "LinearRegressionBlock",
+        "out_features": 5,
+        "freeze": true
+      }
+    },
+    {
+      "id": "logit",
+      "op": "custom_block",
+      "inputs": ["input"],
+      "kwargs": {
+        "fn": "LogisticRegressionBlock",
+        "out_features": 3
+      }
+    },
+    {
+      "id": "svm",
+      "op": "custom_block",
+      "inputs": ["input"],
+      "kwargs": {
+        "fn": "SVMBlock",
+        "out_features": 4,
+        "mode": "SVR"
+      }
+    },
+    {
+      "id": "lin_b",
+      "op": "add",
+      "inputs": ["lin"],
+      "kwargs": {
+        "param": {
+          "name": "bias5",
+          "shape": [5],
+          "init": "normal"
+        }
+      }
+    },
+    {
+      "id": "logit_b",
+      "op": "add",
+      "inputs": ["logit"],
+      "kwargs": {
+        "param": {
+          "name": "bias3",
+          "shape": [3],
+          "init": "normal"
+        }
+      }
+    },
+    {
+      "id": "svm_b",
+      "op": "add",
+      "inputs": ["svm"],
+      "kwargs": {
+        "param": {
+          "name": "bias4",
+          "shape": [4],
+          "init": "normal"
+        }
+      }
+    },
+    {
+      "id": "lin_s",
+      "op": "mul",
+      "inputs": ["lin_b"],
+      "kwargs": {
+        "param": {
+          "name": "scale5",
+          "shape": [5],
+          "init": "ones"
+        }
+      }
+    },
+    {
+      "id": "logit_s",
+      "op": "mul",
+      "inputs": ["logit_b"],
+      "kwargs": {
+        "param": {
+          "name": "scale3",
+          "shape": [3],
+          "init": "ones"
+        }
+      }
+    },
+    {
+      "id": "fusion_add",
+      "op": "add",
+      "inputs": ["lin_s"],
+      "kwargs": {
+        "param": {
+          "name": "fusion_bias",
+          "shape": [5],
+          "init": "normal"
+        }
+      }
+    },
+    {
+      "id": "concat",
+      "op": "concat",
+      "inputs": ["lin_s", "logit_s", "svm_b", "fusion_add"],
+      "kwargs": {}
+    },
+    {
+      "id": "act",
+      "op": "act",
+      "inputs": ["concat"],
+      "kwargs": {
+        "act_type": "relu"
+      }
+    },
+    {
+      "id": "output",
+      "op": "output_marker",
+      "inputs": ["act"],
+      "kwargs": {}
+    }
+  ],
+  "output_id": "output"
+}
